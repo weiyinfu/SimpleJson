@@ -1,8 +1,11 @@
 package cn.weiyinfu.simplejson;
 
+import cn.weiyinfu.gs.BeanGs;
 import cn.weiyinfu.gs.Gs;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -224,7 +227,7 @@ private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int
  * ========================
  * static区，提供给外部使用
  */
-private static JsonObject loads(String content) throws JsonParseError {
+public static JsonObject loads(String content) throws JsonParseError {
     return new Json(content).obj;
 }
 
@@ -335,6 +338,16 @@ public static <T> String prettyDumps(T obj, int indent) throws JsonDumpsError {
     return prettyDumps(j, indent, 0);
 }
 
+public static <T> String dumps(T obj) throws JsonDumpsError {
+    JsonObject j = null;
+    if (!(obj instanceof JsonObject)) {
+        j = toJsonObject(obj);
+    } else {
+        j = (JsonObject) obj;
+    }
+    return dumps(j);
+}
+
 public static <T> JsonObject toJsonObject(T obj) throws JsonDumpsError {
     //把一个对象转成JSONObject
     JsonObject jsonObj = null;
@@ -356,6 +369,13 @@ public static <T> JsonObject toJsonObject(T obj) throws JsonDumpsError {
             a.add(toJsonObject(it));
         }
         jsonObj = new JsonObject(a, JsonType.Array);
+    } else if (obj.getClass().isArray()) {
+        Object[] objArray = (Object[]) obj;
+        List<JsonObject> a = new ArrayList<>();
+        for (var it : objArray) {
+            a.add(toJsonObject(it));
+        }
+        jsonObj = new JsonObject(a, JsonType.Array);
     } else if (obj instanceof String) {
         jsonObj = new JsonObject(obj, JsonType.String);
     } else if (obj instanceof Boolean) {
@@ -367,5 +387,51 @@ public static <T> JsonObject toJsonObject(T obj) throws JsonDumpsError {
         jsonObj = toJsonObject(map);
     }
     return jsonObj;
+}
+
+public static <T> T fromJsonObject(JsonObject obj, Class<T> type) {
+    switch (obj.type) {
+        case Array: {
+            //如何处理数组呢？
+            //TODO:toJsonObject也需要考虑数组
+            List<JsonObject> a = obj.asArray();
+//            type.arrayType();
+            throw new RuntimeException("how to handle array");
+        }
+        case Map: {
+            try {
+                T o = type.getDeclaredConstructor().newInstance();
+                Field[] fields = type.getDeclaredFields();
+                var bean = new BeanGs(o, false);
+                var ma = obj.asMap();
+                for (Field f : fields) {
+                    var value = fromJsonObject(ma.get(f.getName()), f.getType());
+                    bean.set(f.getName(), value);
+                }
+                return o;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            break;
+        }
+        case Integer: {
+            return (T) obj.asInteger();
+        }
+        case Float: {
+            return (T) obj.asFloat();
+        }
+        case String: {
+            return (T) obj.asString();
+        }
+        case Boolean: {
+            return (T) obj.asBoolean();
+        }
+    }
+    throw new RuntimeException("parse JsonObject error");
+}
+
+public static <T> T parseBean(String json, Class<T> type) throws JsonParseError {
+    JsonObject obj = loads(json);
+    return fromJsonObject(obj, type);
 }
 }
