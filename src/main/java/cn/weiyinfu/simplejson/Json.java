@@ -1,14 +1,8 @@
 package cn.weiyinfu.simplejson;
 
-import cn.weiyinfu.gs.BeanGs;
 import cn.weiyinfu.gs.Gs;
 
-import java.io.IOException;
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 
 /**
@@ -17,7 +11,7 @@ import java.util.*;
  * 这是一个小练习
  */
 public class Json {
-private final JsonObject obj;
+private final Object obj;
 private int I = -1;//解析到了第几个token
 
 Json(String content) throws JsonParseError {
@@ -25,7 +19,7 @@ Json(String content) throws JsonParseError {
     Map<Integer, Integer> matches = match(tokens);
     this.obj = this.parse(tokens, matches, 0);
     if (this.I != tokens.size() - 1) {
-        throw new JsonParseError("有无法解析的剩余token");
+        throw new JsonParseError("有无法解析的剩余token ");
     }
 }
 
@@ -153,7 +147,7 @@ private Map<Integer, Integer> match(List<String> tokens) throws JsonParseError {
     return pairs;
 }
 
-private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int beg) throws JsonParseError {
+private Object parse(List<String> tokens, Map<Integer, Integer> matches, int beg) throws JsonParseError {
     /**
      * 此函数根据beg吃掉一个JsonObject，更改this.I变量，表示下次从何处开始解析
      * */
@@ -161,7 +155,7 @@ private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int
     if (beginString.equals("{")) {
         //是个对象
         int end = matches.get(beg);
-        Map<String, JsonObject> ma = new HashMap<>();
+        JsonObject ma = new JsonObject();
         for (int i = beg + 1; i < end; i = this.I + 1) {
             if (i != beg + 1) {
                 //如果不是beg+1，那么肯定需要逗号与上一个元素隔开
@@ -178,15 +172,15 @@ private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int
             if (!tokens.get(i + 1).equals(":")) {
                 throw new JsonParseError("need :");
             }
-            JsonObject value = parse(tokens, matches, i + 2);
+            Object value = parse(tokens, matches, i + 2);
             ma.put(key, value);
         }
         this.I = end;
-        return new JsonObject(ma, JsonType.Map);
+        return ma;
     } else if (beginString.equals("[")) {
         //是个数组
         int end = matches.get(beg);
-        ArrayList<JsonObject> a = new ArrayList<>();
+        JsonArray a = new JsonArray();
         for (int i = beg + 1; i < end; i = this.I + 1) {
             if (i != beg + 1) {
                 //如果不是数组里面的第一个元素，那么第一个token应该是逗号
@@ -195,11 +189,11 @@ private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int
                 }
                 i++;
             }
-            JsonObject item = parse(tokens, matches, i);
+            Object item = parse(tokens, matches, i);
             a.add(item);
         }
         this.I = end;
-        return new JsonObject(a, JsonType.Array);
+        return a;
     } else if (beginString.startsWith("\"")) {
         //基本数据类型，string，number，boolean
         this.I = beg;
@@ -207,18 +201,18 @@ private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int
             throw new JsonParseError("字符串应该开头和结尾都是双引号");
         }
         String s = beginString.substring(1, beginString.length() - 1);
-        return new JsonObject(s, JsonType.String);
+        return s;
     } else if (beginString.equals("true") || beginString.equals("false")) {
         this.I = beg;
-        return new JsonObject(Boolean.valueOf(beginString), JsonType.Boolean);
+        return Boolean.valueOf(beginString);
     } else {
         //数字
         this.I = beg;
         if (beginString.contains(".")) {
             //浮点数
-            return new JsonObject(Float.parseFloat(beginString), JsonType.Float);
+            return Float.parseFloat(beginString);
         } else {
-            return new JsonObject(Integer.valueOf(beginString), JsonType.Integer);
+            return Integer.valueOf(beginString);
         }
     }
 }
@@ -227,58 +221,53 @@ private JsonObject parse(List<String> tokens, Map<Integer, Integer> matches, int
  * ========================
  * static区，提供给外部使用
  */
-public static JsonObject loads(String content) throws JsonParseError {
+public static Object loads(String content) throws JsonParseError {
     return new Json(content).obj;
 }
 
-public static List<JsonObject> parseArray(String content) throws JsonParseError {
-    return loads(content).asArray();
+public static JsonArray parseArray(String content) throws JsonParseError {
+    return (JsonArray) loads(content);
 }
 
-public static List<JsonObject> parseArray(Path filepath) throws IOException, JsonParseError {
-    return load(filepath).asArray();
+public static JsonObject parseObject(String content) throws JsonParseError {
+    return (JsonObject) loads(content);
 }
 
-public static JsonObject load(Path p) throws IOException, JsonParseError {
-    return loads(Files.readString(p));
-}
-
-public static void dump(JsonObject obj, Path p) throws IOException {
-    Files.writeString(p, dumps(obj), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-}
-
-public static void prettyDump(JsonObject obj, Path p, int indent) throws IOException, JsonDumpsError {
-    Files.writeString(p, prettyDumps(obj, indent), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-}
-
-public static String dumps(JsonObject obj) {
-    if (obj.type == JsonType.Array) {
-        List<JsonObject> vec = obj.asArray();
+public static String dumps(Object obj) {
+    if (obj.getClass().isArray()) {
+        obj = Arrays.asList((Object[]) obj);
+    }
+    if (obj instanceof List) {
         StringBuilder builder = new StringBuilder();
         builder.append("[");
-        for (JsonObject i : vec) {
+        for (Object i : (List<Object>) obj) {
             builder.append(dumps(i)).append(",");
         }
         builder.deleteCharAt(builder.length() - 1);
         builder.append("]");
         return builder.toString();
-    } else if (obj.type == JsonType.Map) {
-        Map<String, JsonObject> ma = obj.asMap();
+    } else if (obj instanceof Map) {
+        Map<String, Object> ma = (Map<String, Object>) obj;
         StringBuilder builder = new StringBuilder();
         builder.append("{");
         ma.forEach((k, v) -> builder.append(String.format("\"%s\":%s,", k, dumps(v))));
         builder.deleteCharAt(builder.length() - 1);//删除掉最后一个多余的逗号
         builder.append("}");
         return builder.toString();
-    } else if (obj.type == JsonType.String) {
-        return String.format("\"%s\"", obj.asString());
-    } else {
+    } else if (obj instanceof String) {
+        return String.format("\"%s\"", obj);
+    } else if (obj instanceof Integer
+            || obj instanceof Boolean
+            || obj instanceof Float) {
         //基本类型，直接toString
-        return obj.obj.toString();
+        return obj.toString();
+    } else {
+        Map<String, Object> ma = Gs.bean2Map(obj, false);
+        return dumps(ma);
     }
 }
 
-private static String prettyDumps(JsonObject jsonObj, int indent, int count) {
+private static String prettyDumps(Object obj, int indent, int count) throws JsonDumpsError {
     /*
      * indent表示每层缩进个数
      * count表示当前缩进层数
@@ -286,25 +275,27 @@ private static String prettyDumps(JsonObject jsonObj, int indent, int count) {
      * */
     String indentString = " ".repeat(indent * count);
     String parentIndent = " ".repeat(indent * Math.max(0, count - 1));
-    if (jsonObj.type == JsonType.Array) {
-        String s = dumps(jsonObj);
+    if (obj.getClass().isArray()) {
+        obj = Arrays.asList((Object[]) obj);
+    }
+    if (obj instanceof List) {
+        String s = dumps(obj);
         if (s.length() < 120) {
             return s;
         }
         StringBuilder builder = new StringBuilder();
-        List<JsonObject> vec = jsonObj.asArray();
         builder.append("[\n");
         boolean first = true;
-        for (JsonObject i : vec) {
+        for (Object i : (List<Object>) obj) {
             if (first) first = false;
             else builder.append(",\n");
             builder.append(indentString).append(prettyDumps(i, indent, count + 1));
         }
         builder.append('\n').append(parentIndent).append("]");
         return builder.toString();
-    } else if (jsonObj.type == JsonType.Map) {
-        Map<String, JsonObject> ma = jsonObj.asMap();
-        String s = dumps(jsonObj);
+    } else if (obj instanceof Map) {
+        Map<String, Object> ma = (Map<String, Object>) obj;
+        String s = dumps(obj);
         if (s.length() < 120) {
             return s;
         }
@@ -312,7 +303,7 @@ private static String prettyDumps(JsonObject jsonObj, int indent, int count) {
         builder.append("{\n");
         boolean isFirst = true;
         for (String k : ma.keySet()) {
-            JsonObject v = ma.get(k);
+            Object v = ma.get(k);
             if (isFirst) isFirst = false;
             else builder.append(",\n");
             //如果是字典的value是基本数据类型，则不用进行多余缩进，否则需要进行缩进
@@ -320,118 +311,38 @@ private static String prettyDumps(JsonObject jsonObj, int indent, int count) {
         }
         builder.append("\n").append(parentIndent).append("}");
         return builder.toString();
-    } else if (jsonObj.type == JsonType.String) {
-        return String.format("\"%s\"", jsonObj.asString());
-    } else {
+    } else if (obj instanceof String) {
+        return String.format("\"%s\"", obj);
+    } else if (obj instanceof Integer
+            || obj instanceof Boolean
+            || obj instanceof Float) {
         //基本类型，直接toString
-        return jsonObj.obj.toString();
+        return obj.toString();
+    } else {
+        Map<String, Object> ma = Gs.bean2Map(obj, false);
+        return prettyDumps(ma, indent);
     }
 }
 
 public static <T> String prettyDumps(T obj, int indent) throws JsonDumpsError {
-    JsonObject j = null;
-    if (!(obj instanceof JsonObject)) {
-        j = toJsonObject(obj);
-    } else {
-        j = (JsonObject) obj;
-    }
-    return prettyDumps(j, indent, 0);
+    return prettyDumps(obj, indent, 0);
 }
 
-public static <T> String dumps(T obj) throws JsonDumpsError {
-    JsonObject j = null;
-    if (!(obj instanceof JsonObject)) {
-        j = toJsonObject(obj);
-    } else {
-        j = (JsonObject) obj;
+public static <T> T parseObject(String json, Class<T> type) throws JsonParseError, NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
+    if (type == String.class || type == Integer.class || type == Float.class || type == Boolean.class) {
+        return (T) loads(json);
     }
-    return dumps(j);
+    JsonObject obj = parseObject(json);
+    return Gs.map2Bean(obj, type, false);
 }
 
-public static <T> JsonObject toJsonObject(T obj) throws JsonDumpsError {
-    //把一个对象转成JSONObject
-    JsonObject jsonObj = null;
-    if (obj instanceof Map) {
-        Map<String, JsonObject> ma = new HashMap<>();
-        var original = (Map) obj;
-        for (var it : original.keySet()) {
-            var value = original.get(it);
-            if (!(it instanceof String)) {
-                throw new JsonDumpsError("key error in map " + it.getClass());
-            }
-            ma.put((String) it, toJsonObject(value));
-        }
-        jsonObj = new JsonObject(ma, JsonType.Map);
-    } else if (obj instanceof List) {
-        var original = (List) obj;
-        List<JsonObject> a = new ArrayList<>();
-        for (var it : original) {
-            a.add(toJsonObject(it));
-        }
-        jsonObj = new JsonObject(a, JsonType.Array);
-    } else if (obj.getClass().isArray()) {
-        Object[] objArray = (Object[]) obj;
-        List<JsonObject> a = new ArrayList<>();
-        for (var it : objArray) {
-            a.add(toJsonObject(it));
-        }
-        jsonObj = new JsonObject(a, JsonType.Array);
-    } else if (obj instanceof String) {
-        jsonObj = new JsonObject(obj, JsonType.String);
-    } else if (obj instanceof Boolean) {
-        jsonObj = new JsonObject(obj, JsonType.Boolean);
-    } else if (obj instanceof Integer) {
-        jsonObj = new JsonObject(obj, JsonType.Integer);
-    } else {
-        var map = Gs.bean2Map(obj, false);
-        jsonObj = toJsonObject(map);
+public static <T> List<T> parseArray(String json, Class<T> type) throws JsonParseError {
+    //解析数组,type表示数组中的元素
+    JsonArray a = parseArray(json);
+    var ans = new ArrayList<T>();
+    for (var i : a) {
+        ans.add(Gs.map2Bean((JsonObject) i, type, false));
     }
-    return jsonObj;
-}
-
-public static <T> T fromJsonObject(JsonObject obj, Class<T> type) {
-    switch (obj.type) {
-        case Array: {
-            //如何处理数组呢？
-            //TODO:toJsonObject也需要考虑数组
-            List<JsonObject> a = obj.asArray();
-//            type.arrayType();
-            throw new RuntimeException("how to handle array");
-        }
-        case Map: {
-            try {
-                T o = type.getDeclaredConstructor().newInstance();
-                Field[] fields = type.getDeclaredFields();
-                var bean = new BeanGs(o, false);
-                var ma = obj.asMap();
-                for (Field f : fields) {
-                    var value = fromJsonObject(ma.get(f.getName()), f.getType());
-                    bean.set(f.getName(), value);
-                }
-                return o;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            break;
-        }
-        case Integer: {
-            return (T) obj.asInteger();
-        }
-        case Float: {
-            return (T) obj.asFloat();
-        }
-        case String: {
-            return (T) obj.asString();
-        }
-        case Boolean: {
-            return (T) obj.asBoolean();
-        }
-    }
-    throw new RuntimeException("parse JsonObject error");
-}
-
-public static <T> T parseBean(String json, Class<T> type) throws JsonParseError {
-    JsonObject obj = loads(json);
-    return fromJsonObject(obj, type);
+    return ans;
 }
 }

@@ -4,10 +4,7 @@ import cn.weiyinfu.simplejson.JsonDumpsError;
 import cn.weiyinfu.simplejson.JsonParseError;
 import junit.framework.TestCase;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.TreeMap;
@@ -38,53 +35,78 @@ public static class User {
     }
 }
 
-public void testBean() throws JsonDumpsError, JsonParseError {
+User user;
+
+@Override
+protected void setUp() throws Exception {
+    super.setUp();
     var haha = new User();
     haha.name = "weiyinfu";
     haha.age = 13;
-    var s = Json.prettyDumps(haha, 2);
+    this.user = haha;
+}
 
-    Map<String, Object> map = Gs.bean2Map(haha, false);
+public void testDumpBean() throws JsonDumpsError, JsonParseError, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+    var s = Json.prettyDumps(this.user, 2);
+    Map<String, Object> map = Gs.bean2Map(this.user, false);
     System.out.println(s);
     System.out.println(Json.prettyDumps(map, 2));
-
-//    var res = Json.parseBean(s, User.class);
-//    System.out.println(res.getName() + " " + res.getAge());
-    var json = Json.loads(s);
-    var x = Json.fromJsonObject(json, User.class);
-    System.out.println(x.getName() + " " + x.getAge());
+    var res = Json.parseObject(s, User.class);
+    System.out.println(res.getName() + " " + res.getAge());
 }
 
-public void testList() throws JsonDumpsError {
-    System.out.println(Json.prettyDumps(Arrays.asList("one", "two", "three"), 2));
+public void testDumpList() throws JsonDumpsError {
+    var list = Arrays.asList("one", "two", "three");
+    System.out.println(Json.prettyDumps(list, 2));
 }
 
-public void testList2() throws JsonDumpsError {
+public void testDumpListBean() throws JsonDumpsError {
+    var list = Arrays.asList(this.user, this.user, this.user);
+    System.out.println(Json.prettyDumps(list, 2));
+}
+
+public void testDumpArray() throws JsonDumpsError {
     var x = new String[]{"one", "two", "three"};
-    System.out.println(x.getClass().isArray());
-    var obj = Json.toJsonObject(x);
-    System.out.println(obj);
-    System.out.println(obj.asArray());
-    System.out.println(Json.prettyDumps(x, 2));
     System.out.println(Json.dumps(x));
 }
 
-public void testMap() throws JsonDumpsError {
+public void testDumpArrayBean() throws JsonDumpsError {
+    var x = new User[]{this.user, this.user, this.user};
+    System.out.println(Json.dumps(x));
+}
+
+public void testDumpMap() throws JsonDumpsError {
     Map<String, Integer> a = new TreeMap<>();
     a.put("one", 1);
     a.put("two", 2);
     System.out.println(Json.prettyDumps(a, 2));
 }
 
-public void testClass() {
-    var x = new ArrayList<Integer>();
-    System.out.println(x.getClass());
-    System.out.println(x.getClass().arrayType());
-    System.out.println(x.getClass().componentType());
-    System.out.println(x.getClass().getComponentType());
-    System.out.println(x.getClass().isArray());
-    System.out.println(x.getClass().getGenericSuperclass());
-    Type type = ((ParameterizedType) x.getClass().getGenericSuperclass()).getActualTypeArguments()[0];
-    System.out.println(type);
+public void testDumpSimple() throws JsonDumpsError {
+    String s = "haha";
+    int x = 3;
+    System.out.println(Json.dumps(x));
+    System.out.println(Json.dumps(s));
+}
+
+public void testLoadSimple() throws JsonDumpsError, JsonParseError, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+    String s = "haha";
+    int x = 3;
+    String ss = Json.parseObject(Json.dumps(s), String.class);
+    System.out.println(ss);
+    int xx = Json.parseObject(Json.dumps(x), Integer.class);
+    System.out.println(xx);
+}
+
+public void testLoadArray() throws JsonParseError, JsonDumpsError {
+    var s = "[{\"name\":\"weiyinfu\",\"age\":13},{\"name\":\"weiyinfu\",\"age\":13},{\"name\":\"weiyinfu\",\"age\":13}]";
+    var ans = Json.parseArray(s, User.class);
+    System.out.println(Json.dumps(ans));
+}
+
+public void testLoadBean() throws JsonParseError, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+    var s = "{\"name\":\"weiyinfu\",\"age\":13}";
+    var user = Json.parseObject(s, User.class);
+    System.out.println(user.getName());
 }
 }
