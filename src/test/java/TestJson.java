@@ -1,4 +1,5 @@
 import cn.weiyinfu.simplejson.Json;
+import cn.weiyinfu.simplejson.JsonDumpsError;
 import cn.weiyinfu.simplejson.JsonObject;
 import cn.weiyinfu.simplejson.JsonParseError;
 
@@ -19,9 +20,8 @@ public static void main(String[] args) throws IOException, JsonParseError {
                 Files.createDirectory(folder);
             }
             Path filepath = folder.resolve(p.getFileName());
-//            Json.dump(obj,filepath );
             Json.prettyDump(obj, filepath, 2);
-        } catch (IOException | JsonParseError e) {
+        } catch (IOException | JsonParseError | JsonDumpsError e) {
             e.printStackTrace();
         }
     });

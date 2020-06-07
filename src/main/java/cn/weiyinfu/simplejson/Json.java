@@ -1,5 +1,7 @@
 package cn.weiyinfu.simplejson;
 
+import cn.weiyinfu.gs.Gs;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -242,7 +244,7 @@ public static void dump(JsonObject obj, Path p) throws IOException {
     Files.writeString(p, dumps(obj), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 }
 
-public static void prettyDump(JsonObject obj, Path p, int indent) throws IOException {
+public static void prettyDump(JsonObject obj, Path p, int indent) throws IOException, JsonDumpsError {
     Files.writeString(p, prettyDumps(obj, indent), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 }
 
@@ -273,7 +275,7 @@ public static String dumps(JsonObject obj) {
     }
 }
 
-private static String prettyDumps(JsonObject obj, int indent, int count) {
+private static String prettyDumps(JsonObject jsonObj, int indent, int count) {
     /*
      * indent表示每层缩进个数
      * count表示当前缩进层数
@@ -281,13 +283,13 @@ private static String prettyDumps(JsonObject obj, int indent, int count) {
      * */
     String indentString = " ".repeat(indent * count);
     String parentIndent = " ".repeat(indent * Math.max(0, count - 1));
-    if (obj.type == JsonType.Array) {
-        String s = dumps(obj);
+    if (jsonObj.type == JsonType.Array) {
+        String s = dumps(jsonObj);
         if (s.length() < 120) {
             return s;
         }
         StringBuilder builder = new StringBuilder();
-        List<JsonObject> vec = obj.asArray();
+        List<JsonObject> vec = jsonObj.asArray();
         builder.append("[\n");
         boolean first = true;
         for (JsonObject i : vec) {
@@ -297,9 +299,9 @@ private static String prettyDumps(JsonObject obj, int indent, int count) {
         }
         builder.append('\n').append(parentIndent).append("]");
         return builder.toString();
-    } else if (obj.type == JsonType.Map) {
-        Map<String, JsonObject> ma = obj.asMap();
-        String s = dumps(obj);
+    } else if (jsonObj.type == JsonType.Map) {
+        Map<String, JsonObject> ma = jsonObj.asMap();
+        String s = dumps(jsonObj);
         if (s.length() < 120) {
             return s;
         }
@@ -315,16 +317,55 @@ private static String prettyDumps(JsonObject obj, int indent, int count) {
         }
         builder.append("\n").append(parentIndent).append("}");
         return builder.toString();
-    } else if (obj.type == JsonType.String) {
-        return String.format("\"%s\"", obj.asString());
+    } else if (jsonObj.type == JsonType.String) {
+        return String.format("\"%s\"", jsonObj.asString());
     } else {
         //基本类型，直接toString
-        return obj.obj.toString();
+        return jsonObj.obj.toString();
     }
 }
 
-public static String prettyDumps(JsonObject obj, int indent) {
-    //以比价美观的方式打印JSON，打印速度可能会比较慢
-    return prettyDumps(obj, indent, 1);
+public static <T> String prettyDumps(T obj, int indent) throws JsonDumpsError {
+    JsonObject j = null;
+    if (!(obj instanceof JsonObject)) {
+        j = toJsonObject(obj);
+    } else {
+        j = (JsonObject) obj;
+    }
+    return prettyDumps(j, indent, 0);
+}
+
+public static <T> JsonObject toJsonObject(T obj) throws JsonDumpsError {
+    //把一个对象转成JSONObject
+    JsonObject jsonObj = null;
+    if (obj instanceof Map) {
+        Map<String, JsonObject> ma = new HashMap<>();
+        var original = (Map) obj;
+        for (var it : original.keySet()) {
+            var value = original.get(it);
+            if (!(it instanceof String)) {
+                throw new JsonDumpsError("key error in map " + it.getClass());
+            }
+            ma.put((String) it, toJsonObject(value));
+        }
+        jsonObj = new JsonObject(ma, JsonType.Map);
+    } else if (obj instanceof List) {
+        var original = (List) obj;
+        List<JsonObject> a = new ArrayList<>();
+        for (var it : original) {
+            a.add(toJsonObject(it));
+        }
+        jsonObj = new JsonObject(a, JsonType.Array);
+    } else if (obj instanceof String) {
+        jsonObj = new JsonObject(obj, JsonType.String);
+    } else if (obj instanceof Boolean) {
+        jsonObj = new JsonObject(obj, JsonType.Boolean);
+    } else if (obj instanceof Integer) {
+        jsonObj = new JsonObject(obj, JsonType.Integer);
+    } else {
+        var map = Gs.bean2Map(obj, false);
+        jsonObj = toJsonObject(map);
+    }
+    return jsonObj;
 }
 }
